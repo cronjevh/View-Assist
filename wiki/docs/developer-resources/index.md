@@ -10,3 +10,4 @@ This section is dedicated to providing detailed information for interacting and 
 * [Timers](./timers.md) - How timers are created and handled
 * [Templates](./templates.md) - Details for Jinja related templates
 * [Actions](./actions.md) - View Assist actions usage and examples
+* [AI Response Card Lifecycle](./ai-response-lifecycle.md) - Deterministic 30s clear logic for streamed AI responses

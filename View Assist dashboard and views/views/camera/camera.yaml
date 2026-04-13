@@ -19,31 +19,23 @@ variables:
     ]]]
   var_camera: |-
     [[[
+      const preferredCameras = [
+        'camera.front_door_live_view',
+        'camera.front_door_live'
+      ];
       const urlParams = variables.var_url_params;
       const urlCamera = urlParams.get('camera');
-      const showAll = urlParams.get('show');
-
-      if (showAll === 'all' || showAll === 'configured') {
-        return "";
-      }
 
       if (urlCamera) {
         return urlCamera;
       }
 
-      const availableCameras = [];
-      const cameraKeys = Object.keys(hass.states).filter(id => id.startsWith('camera.'));
-
-      for (let i = 0; i < cameraKeys.length; i++) {
-        const entityId = cameraKeys[i];
-        const state = hass.states[entityId].state;
-        if (state !== 'unavailable' && state !== 'unknown') {
-          availableCameras.push(entityId);
+      for (let i = 0; i < preferredCameras.length; i++) {
+        const entityId = preferredCameras[i];
+        const entity = hass.states[entityId];
+        if (entity && entity.state !== 'unavailable' && entity.state !== 'unknown') {
+          return entityId;
         }
-      }
-
-      if (availableCameras.length === 1) {
-        return availableCameras[0];
       }
 
       return "";
@@ -58,67 +50,24 @@ variables:
         return state !== 'unavailable' && state !== 'unknown';
       };
 
-      const urlParams = variables.var_url_params;
-      const showType = urlParams.get('show');
-      const configuredCameras = urlParams.get('cameras');
-      
-      if (showType === 'configured' && configuredCameras) {
-        const cameras = [];
-        const cameraEntityList = decodeURIComponent(configuredCameras).split(',');
-        
-        for (let i = 0; i < cameraEntityList.length; i++) {
-          const entityId = cameraEntityList[i].trim();
-          const entity = hass.states[entityId];
-          if (entity && isCameraAvailable(entity.state)) {
-            cameras.push({
-              entity_id: entityId,
-              name: entity.attributes.friendly_name || formatCameraName(entityId)
-            });
-          }
-        }
-        return cameras;
-      }
-
-      const viewAssistEntity = variables.var_assistsat_entity;
-
-      if (viewAssistEntity && hass.states[viewAssistEntity]) {
-        const cameraList = hass.states[viewAssistEntity].attributes.camera_list;
-
-        if (Array.isArray(cameraList)) {
-          const cameras = [];
-
-          for (let i = 0; i < cameraList.length; i++) {
-            const entityId = cameraList[i];
-            const entity = hass.states[entityId];
-            if (entity && isCameraAvailable(entity.state)) {
-              cameras.push({
-                entity_id: entityId,
-                name: entity.attributes.friendly_name || formatCameraName(entityId)
-              });
-            }
-          }
-
-          if (cameras.length > 0) {
-            return cameras;
-          }
-        }
-      }
-
+      const preferredCameras = [
+        'camera.front_door_live_view',
+        'camera.front_door_live'
+      ];
       const cameras = [];
-      const cameraKeys = Object.keys(hass.states).filter(id => id.startsWith('camera.'));
 
-      for (let i = 0; i < cameraKeys.length; i++) {
-        const entityId = cameraKeys[i];
+      for (let i = 0; i < preferredCameras.length; i++) {
+        const entityId = preferredCameras[i];
         const entity = hass.states[entityId];
-        if (isCameraAvailable(entity.state)) {
+        if (entity && isCameraAvailable(entity.state)) {
           cameras.push({
             entity_id: entityId,
             name: entity.attributes.friendly_name || formatCameraName(entityId)
           });
+          break;
         }
       }
 
-      cameras.sort((a, b) => a.name.localeCompare(b.name));
       return cameras;
     ]]]
   var_responsive_columns: |-
@@ -210,16 +159,24 @@ styles:
     - grid-template-areas: |-
         [[[
           return variables.var_camera ? 
-            `"status status"  
+            `"camera camera"
              "camera camera"
              "camera camera"` :
-            `"status status"
+            `"camera_select camera_select"
              "camera_select camera_select"
              "camera_select camera_select"`;
         ]]]
     - grid-template-columns: 1fr 1fr
     - grid-template-rows: min-content 1fr 1fr
+    - height: '100%'
+    - min-height: 0
   card:
+    - height: 100vh
+    - min-height: 100vh
+    - width: 100vw
+    - max-width: 100vw
+    - aspect-ratio: auto
+    - padding: 0
     - background: >-
         [[[ return `center / cover no-repeat
         url(${variables.background})` ]]]
@@ -231,8 +188,14 @@ styles:
   custom_fields:
     camera:
       - display: '[[[ return variables.var_camera ? ''block'' : ''none'' ]]]'
-      - height: 100%
-      - width: 100%
+      - position: absolute
+      - top: 0
+      - left: 0
+      - right: 0
+      - bottom: 0
+      - z-index: 0
+      - margin: 0
+      - overflow: hidden
     camera_select:
       - display: '[[[ return variables.var_camera ? ''none'' : ''block'' ]]]'
       - margin: 0.125rem
@@ -243,7 +206,7 @@ styles:
       - position: absolute
       - left: 1rem
       - top: 1rem
-      - z-index: 1
+      - z-index: 2
 custom_fields:
   _hold_mode_init: '[[[ return variables.var_setup_camera_hold_mode ]]]'
   back_button:
@@ -281,6 +244,33 @@ custom_fields:
       show_state: false
       tap_action:
         action: more-info
+      card_mod:
+        style: |
+          ha-card {
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            border-radius: 0;
+            overflow: hidden; /* crop sides when we 'cover' */
+            background: black;
+          }
+
+          /* Make the live view fill height and crop width */
+          ha-card ha-camera-stream,
+          ha-card hui-image,
+          ha-card .image {
+            height: 100% !important;
+            width: 100% !important;
+          }
+
+          ha-card ha-camera-stream video,
+          ha-card ha-camera-stream img,
+          ha-card hui-image img {
+            height: 100% !important;
+            width: 100% !important;
+            object-fit: cover !important;
+            object-position: center center !important;
+          }
   camera_select:
     card:
       type: grid
